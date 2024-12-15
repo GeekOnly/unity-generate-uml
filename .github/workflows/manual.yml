@@ -1,67 +1,68 @@
 name: Generate UML
+
 on:
   push:
-    branches:
-      - master
-  workflow_dispatch:
+    paths:
+      - 'Assets/Scripts/**' # Trigger on script changes
+  workflow_dispatch: # Allow manual triggers
 
 jobs:
   generate-uml:
-    name: 'Generate UML'
+    name: Generate UML
     runs-on: ubuntu-latest
     env:
       CODE_PATH: "./Assets/Scripts/"
       UML_OUTPUT_PATH: "./UML/"
-      UMP_GENERATION_PARAMETERS: -public -createAssociation -allInOne
+      UML_GENERATION_PARAMETERS: "-public -createAssociation -allInOne"
+
     steps:
-      - uses: actions/checkout@v3
+      # Step 1: Checkout the repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
 
-      - name: Remove old diagrams
-        run: rm -r ${{ env.UML_OUTPUT_PATH }} || true
+      # Step 2: Remove old diagrams
+      - name: Clean UML Output Folder
+        run: rm -rf ${{ env.UML_OUTPUT_PATH }} || true
 
-      - name: Check if there is code
+      # Step 3: Verify code directory exists
+      - name: Check for Code
         run: |
           if [ -d "${{ env.CODE_PATH }}" ]; then
             echo "CODE_EXISTS=true" >> $GITHUB_ENV
           else
             echo "CODE_EXISTS=false" >> $GITHUB_ENV
-          fi
-        id: check_for_code
 
-      - uses: actions/setup-dotnet@v3
-        if: env.CODE_EXISTS == 'true'
-        with:
-          dotnet-version: 5.0.x
-
-      - name: Install PlantUML Generator
+      # Step 4: Install PlantUML DotNet Tool
+      - name: Install PlantUML Tool
         if: env.CODE_EXISTS == 'true'
         run: |
           dotnet tool install --global PlantUmlClassDiagramGenerator --version 1.2.4
-          dotnet tool restore
+          export PATH="$PATH:~/.dotnet/tools"
 
-      - name: Create a folder for diagrams
+      # Step 5: Create UML Output Folder
+      - name: Create UML Folder
         if: env.CODE_EXISTS == 'true'
         run: mkdir -p ${{ env.UML_OUTPUT_PATH }}
 
-      - name: Generate PlantUML files
-        if: env.CODE_EXISTS == 'true'
-        run: puml-gen ${{ env.CODE_PATH }} ${{ env.UML_OUTPUT_PATH }} ${{ env.UMP_GENERATION_PARAMETERS }}
-
-      - name: Get File names
+      # Step 6: Generate PlantUML files
+      - name: Generate PlantUML Files
         if: env.CODE_EXISTS == 'true'
         run: |
-          UML_FILES=$(find ${{ env.UML_OUTPUT_PATH }} -name "*.puml" | tr '\n' ' ')
-          echo "UML_FILES=${UML_FILES}" >> $GITHUB_ENV
-        id: get_file_names
+          ~/.dotnet/tools/puml-gen ${{ env.CODE_PATH }} ${{ env.UML_OUTPUT_PATH }} ${{ env.UML_GENERATION_PARAMETERS }}
 
+      # Step 7: Generate SVG Diagrams from PUML
       - name: Generate SVG Diagrams
         if: env.CODE_EXISTS == 'true'
-        uses: GeekOnly/plantuml-github-action@master
-        with:
-          args: -v -tsvg ${{ env.UML_FILES }}
+        run: |
+          for file in ${{ env.UML_OUTPUT_PATH }}/*.puml; do
+            java -jar Tools/PlantUML/plantuml.jar -tsvg "$file";
+          done
 
-      - uses: EndBug/add-and-commit@v7
+      # Step 8: Commit and Push Changes
+      - name: Commit and Push UML Diagrams
+        if: env.CODE_EXISTS == 'true'
+        uses: EndBug/add-and-commit@v7
         with:
           author_name: 'UML Bot'
-          author_email: '41898282+uml-bot[bot]@users.noreply.github.com'
-          message: 'Generate UML (${{ github.workflow }})'
+          author_email: 'uml-bot@users.noreply.github.com'
+          message: 'Auto-generated UML Diagrams'
