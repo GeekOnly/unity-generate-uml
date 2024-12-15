@@ -56,7 +56,7 @@ jobs:
 
       - name: Generate SVG Diagrams
         if: env.CODE_EXISTS == 'true'
-        uses: GeekOnly/plantuml-github-action@master
+        uses: cloudbees/plantuml-github-action@master
         with:
           args: -v -tsvg ${{ env.UML_FILES }}
 
